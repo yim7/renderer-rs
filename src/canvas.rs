@@ -1,4 +1,4 @@
-use crate::{interpolate::Interpolate, mesh::Mesh, vector::Vector, vertex::Vertex};
+use crate::{interpolate::Interpolate, matrix::Matrix, mesh::Mesh, vector::Vector, vertex::Vertex};
 use sdl2::render::TextureCreator;
 use sdl2::{
     pixels::{Color, PixelFormatEnum},
@@ -133,12 +133,39 @@ impl<'a> Canvas<'a> {
         }
     }
 
+    pub fn project(&self, v: &Vertex, transform: &Matrix) -> Vertex {
+        let mut p = transform.transform(&v.position);
+        let w = self.width as f32;
+        let h = self.height as f32;
+        p.x = p.x * w + w / 2.0;
+        p.y = -p.y * h + h / 2.0;
+
+        Vertex::new(p, v.color)
+    }
+
     pub fn draw_mesh(&mut self, mesh: &Mesh) {
+        let camera_position = Vector::new(0.0, 0.0, -20.0);
+        let camera_target = Vector::new(0.0, 0.0, 0.0);
+        let camera_up = Vector::new(0.0, 1.0, 0.0);
+
+        let view = Matrix::look_at_lh(&camera_position, &camera_target, &camera_up);
+        let projection =
+            Matrix::perspective_fov_lh(0.8, self.width as f32 / self.height as f32, 0.1, 1.0);
+        let rotation = Matrix::rotation(&mesh.rotation);
+        let translation = Matrix::translation(&mesh.position);
+
+        let world = rotation * translation;
+        let transform = world * view * projection;
+
         for (i, j, k) in &mesh.indices {
-            let v1 = &mesh.vertices[*i];
-            let v2 = &mesh.vertices[*j];
-            let v3 = &mesh.vertices[*k];
-            self.draw_triangle(v1, v2, v3);
+            let a = &mesh.vertices[*i];
+            let b = &mesh.vertices[*j];
+            let c = &mesh.vertices[*k];
+
+            let v1 = self.project(a, &transform);
+            let v2 = self.project(b, &transform);
+            let v3 = self.project(c, &transform);
+            self.draw_triangle(&v1, &v2, &v3);
         }
     }
 }

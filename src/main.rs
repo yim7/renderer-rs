@@ -5,6 +5,7 @@ use std::time::Duration;
 
 mod canvas;
 mod interpolate;
+mod matrix;
 mod mesh;
 mod vector;
 mod vertex;
@@ -19,11 +20,11 @@ pub fn main() {
 
     let mut canvas = Canvas::new(&sdl_context, "game", 800, 600);
 
-    let mesh = Mesh::load("assets/illidan.gua3d").unwrap();
-    canvas.draw_mesh(&mesh);
-    canvas.render();
+    let mut mesh = Mesh::load("assets/illidan.gua3d").unwrap();
+
     let mut event_pump = sdl_context.event_pump().unwrap();
     'running: loop {
+        canvas.clear();
         for event in event_pump.poll_iter() {
             match event {
                 Event::Quit { .. }
@@ -31,9 +32,24 @@ pub fn main() {
                     keycode: Some(Keycode::Escape),
                     ..
                 } => break 'running,
+                Event::KeyDown {
+                    keycode: Some(key), ..
+                } => match key {
+                    Keycode::Up => mesh.rotation.x += 1.0,
+                    Keycode::Down => mesh.rotation.y -= 1.0,
+                    Keycode::Left => mesh.rotation.y += 1.0,
+                    Keycode::Right => mesh.rotation.y -= 1.0,
+                    Keycode::W => mesh.position.x += 1.0,
+                    Keycode::S => mesh.position.x -= 1.0,
+                    Keycode::A => mesh.position.y -= 1.0,
+                    Keycode::D => mesh.position.y += 1.0,
+                    _ => {}
+                },
                 _ => {}
             }
         }
+        canvas.draw_mesh(&mesh);
+        canvas.render();
         // The rest of the game loop goes here...
         ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
     }
