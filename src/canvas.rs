@@ -1,4 +1,4 @@
-use crate::{interpolate::Interpolate, vector::Vector, vertex::Vertex};
+use crate::{interpolate::Interpolate, mesh::Mesh, vector::Vector, vertex::Vertex};
 use sdl2::render::TextureCreator;
 use sdl2::{
     pixels::{Color, PixelFormatEnum},
@@ -7,7 +7,7 @@ use sdl2::{
     video::{Window, WindowContext},
     Sdl,
 };
-use std::mem::swap;
+use std::{mem::swap, time::Duration};
 
 pub struct Canvas<'a> {
     texture_creator: TextureCreator<WindowContext>,
@@ -81,11 +81,18 @@ impl<'a> Canvas<'a> {
         if v1.position.x > v2.position.x {
             swap(&mut v1, &mut v2);
         }
-        let x1 = v1.position.x as i32;
-        let x2 = v2.position.x as i32;
-        for x in x1..=x2 {
-            let factor = (x - x1) as f32 / (x2 - x1) as f32;
+        let x1 = v1.position.x;
+        let x2 = v2.position.x;
+        let (start, end) = (x1 as u32, x2 as u32);
+        for x in start..=end {
+            let factor = if x1 == x2 {
+                0.0
+            } else {
+                (x as f32 - x1) / (x2 - x1)
+            };
+
             let v = v1.interpolate(&v2, factor);
+            // println!("factor {} {} {} {} {:?}", factor, x, x1, x2, v);
             self.draw_point(&v.position, v.color);
         }
     }
@@ -107,7 +114,7 @@ impl<'a> Canvas<'a> {
         }
         let middle_factor = (v2.position.y - v1.position.y) / (v3.position.y - v1.position.y);
         let middle = v1.interpolate(v3, middle_factor);
-        println!("middle {:?}", middle);
+        // println!("middle {:?}", middle);
         let start_y = v1.position.y as i32;
         let end_y = v2.position.y as i32;
         for y in start_y..=end_y {
@@ -123,7 +130,15 @@ impl<'a> Canvas<'a> {
             let va = v2.interpolate(v3, factor);
             let vb = middle.interpolate(v3, factor);
             self.draw_scanline(&va, &vb);
-            // println!("{:?} {:?}", va, vb);
+        }
+    }
+
+    pub fn draw_mesh(&mut self, mesh: &Mesh) {
+        for (i, j, k) in &mesh.indices {
+            let v1 = &mesh.vertices[*i];
+            let v2 = &mesh.vertices[*j];
+            let v3 = &mesh.vertices[*k];
+            self.draw_triangle(v1, v2, v3);
         }
     }
 }
