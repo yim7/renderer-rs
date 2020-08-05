@@ -18,8 +18,17 @@ impl Interpolate for Vector {
 impl Interpolate for Vertex {
     fn interpolate(&self, other: &Self, factor: f32) -> Self {
         let position = self.position.interpolate(&other.position, factor);
+        let normal = self.normal.interpolate(&other.normal, factor);
+        let u = self.u.interpolate(&other.u, factor);
+        let v = self.u.interpolate(&other.v, factor);
         let color = self.color.interpolate(&other.color, factor);
-        Vertex { position, color }
+        Vertex {
+            position,
+            normal,
+            u,
+            v,
+            color,
+        }
     }
 }
 
@@ -30,5 +39,11 @@ impl Interpolate for Color {
         let b = self.b as f32 + (other.b as f32 - self.b as f32) * factor;
         let a = self.a as f32 + (other.a as f32 - self.a as f32) * factor;
         Color::RGBA(r as u8, g as u8, b as u8, a as u8)
+    }
+}
+
+impl Interpolate for f32 {
+    fn interpolate(&self, other: &Self, factor: f32) -> Self {
+        self + (other - self) * factor
     }
 }

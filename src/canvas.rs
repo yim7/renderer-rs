@@ -1,8 +1,11 @@
-use crate::{interpolate::Interpolate, matrix::Matrix, mesh::Mesh, vector::Vector, vertex::Vertex};
+use crate::{
+    interpolate::Interpolate, matrix::Matrix, mesh::Mesh, texture::Texture, vector::Vector,
+    vertex::Vertex,
+};
 use sdl2::render::TextureCreator;
 use sdl2::{
     pixels::{Color, PixelFormatEnum},
-    render::{self, Texture},
+    render::{self, Texture as SdlTexture},
     surface::Surface,
     video::{Window, WindowContext},
     Sdl,
@@ -11,10 +14,11 @@ use std::{mem::swap, time::Duration};
 
 pub struct Canvas<'a> {
     texture_creator: TextureCreator<WindowContext>,
-    buffer: Surface<'a>,
+    pixels: Surface<'a>,
     renderer: render::Canvas<Window>,
     width: u32,
     height: u32,
+    depth_buffer: Vec<f32>,
 }
 
 impl<'a> Canvas<'a> {
@@ -25,59 +29,77 @@ impl<'a> Canvas<'a> {
             .position_centered()
             .build()
             .unwrap();
-        let canvas = window.into_canvas().build().unwrap();
-        let texture_creator = canvas.texture_creator();
-        let surface = Surface::new(width, height, PixelFormatEnum::RGBA32).unwrap();
+        let renderer = window.into_canvas().build().unwrap();
+        let texture_creator = renderer.texture_creator();
+        let pixels = Surface::new(width, height, PixelFormatEnum::RGBA32).unwrap();
+        let len = (width * height) as usize;
+        let depth_buffer = vec![f32::MAX; len];
         Canvas {
-            buffer: surface,
-            renderer: canvas,
+            pixels,
+            renderer,
             texture_creator,
             width,
             height,
+            depth_buffer,
         }
     }
 
     pub fn render(&mut self) {
         let Self {
-            buffer,
+            pixels,
             renderer,
             texture_creator,
             ..
         } = self;
-        let texture = Texture::from_surface(buffer, texture_creator).unwrap();
+        let texture = SdlTexture::from_surface(pixels, texture_creator).unwrap();
         renderer.copy(&texture, None, None).unwrap();
         self.renderer.present()
     }
 
     pub fn clear(&mut self) {
-        self.buffer
+        self.pixels
             .fill_rect(None, Color::RGBA(0, 0, 0, 255))
             .unwrap();
+        self.depth_buffer.iter_mut().for_each(|x| *x = f32::MAX);
         self.renderer.clear()
     }
 
-    fn set_pixel(&mut self, x: u32, y: u32, color: Color) {
+    fn set_pixel(&mut self, x: u32, y: u32, z: f32, color: Color) {
         let w = self.width;
-        self.buffer.with_lock_mut(|pixels| {
-            let i = ((w * y + x) * 4) as usize;
+        let index = (w * y + x) as usize;
+
+        let depth = self.depth_buffer[index];
+        if z > depth {
+            return;
+        }
+        self.depth_buffer[index] = z;
+
+        self.pixels.with_lock_mut(|pixels| {
+            let index = index * 4;
             let Color { r, g, b, a } = color;
-            pixels[i] = r;
-            pixels[i + 1] = g;
-            pixels[i + 2] = b;
-            pixels[i + 3] = a;
+            pixels[index] = r;
+            pixels[index + 1] = g;
+            pixels[index + 2] = b;
+            pixels[index + 3] = a;
         })
     }
 
     pub fn draw_point(&mut self, point: &Vector, color: Color) {
         let x = point.x.round() as u32;
         let y = point.y.round() as u32;
+        let z = point.z;
         let Self { width, height, .. } = *self;
         if x < width && y < height {
-            self.set_pixel(x, y, color);
+            self.set_pixel(x, y, z, color);
         }
     }
 
-    pub fn draw_scanline<'b>(&mut self, mut v1: &'b Vertex, mut v2: &'b Vertex) {
+    pub fn draw_scanline<'b>(
+        &mut self,
+        mut v1: &'b Vertex,
+        mut v2: &'b Vertex,
+        texture: Option<&Texture>,
+    ) {
         if v1.position.x > v2.position.x {
             swap(&mut v1, &mut v2);
         }
@@ -85,15 +107,19 @@ impl<'a> Canvas<'a> {
         let x2 = v2.position.x;
         let (start, end) = (x1 as u32, x2 as u32);
         for x in start..=end {
-            let factor = if x1 == x2 {
+            let factor = if start == end {
                 0.0
             } else {
                 (x as f32 - x1) / (x2 - x1)
             };
 
             let v = v1.interpolate(&v2, factor);
-            // println!("factor {} {} {} {} {:?}", factor, x, x1, x2, v);
-            self.draw_point(&v.position, v.color);
+            let color = if let Some(t) = texture {
+                t.sample(v.u, v.v)
+            } else {
+                v.color
+            };
+            self.draw_point(&v.position, color);
         }
     }
 
@@ -102,6 +128,7 @@ impl<'a> Canvas<'a> {
         mut v1: &'b Vertex,
         mut v2: &'b Vertex,
         mut v3: &'b Vertex,
+        texture: Option<&Texture>,
     ) {
         if v1.position.y > v2.position.y {
             swap(&mut v1, &mut v2);
@@ -118,18 +145,26 @@ impl<'a> Canvas<'a> {
         let start_y = v1.position.y as i32;
         let end_y = v2.position.y as i32;
         for y in start_y..=end_y {
-            let factor = (y - start_y) as f32 / (end_y - start_y) as f32;
+            let factor = if start_y == end_y {
+                0.0
+            } else {
+                (y - start_y) as f32 / (end_y - start_y) as f32
+            };
             let va = v1.interpolate(v2, factor);
             let vb = v1.interpolate(&middle, factor);
-            self.draw_scanline(&va, &vb);
+            self.draw_scanline(&va, &vb, texture);
         }
         let start_y = v2.position.y as i32;
         let end_y = v3.position.y as i32;
         for y in start_y..=end_y {
-            let factor = (y - start_y) as f32 / (end_y - start_y) as f32;
+            let factor = if start_y == end_y {
+                0.0
+            } else {
+                (y - start_y) as f32 / (end_y - start_y) as f32
+            };
             let va = v2.interpolate(v3, factor);
             let vb = middle.interpolate(v3, factor);
-            self.draw_scanline(&va, &vb);
+            self.draw_scanline(&va, &vb, texture);
         }
     }
 
@@ -140,7 +175,7 @@ impl<'a> Canvas<'a> {
         p.x = p.x * w + w / 2.0;
         p.y = -p.y * h + h / 2.0;
 
-        Vertex::new(p, v.color)
+        Vertex::new(p, v.normal, v.u, v.u, v.color)
     }
 
     pub fn draw_mesh(&mut self, mesh: &Mesh) {
@@ -165,7 +200,7 @@ impl<'a> Canvas<'a> {
             let v1 = self.project(a, &transform);
             let v2 = self.project(b, &transform);
             let v3 = self.project(c, &transform);
-            self.draw_triangle(&v1, &v2, &v3);
+            self.draw_triangle(&v1, &v2, &v3, mesh.texture.as_ref());
         }
     }
 }

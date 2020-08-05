@@ -7,6 +7,7 @@ mod canvas;
 mod interpolate;
 mod matrix;
 mod mesh;
+mod texture;
 mod vector;
 mod vertex;
 
@@ -20,7 +21,7 @@ pub fn main() {
 
     let mut canvas = Canvas::new(&sdl_context, "game", 800, 600);
 
-    let mut mesh = Mesh::load("assets/illidan.gua3d").unwrap();
+    let mut mesh = Mesh::load("assets/illidan.3d", Some("assets/illidan.image")).unwrap();
 
     let mut event_pump = sdl_context.event_pump().unwrap();
     'running: loop {
@@ -69,18 +70,27 @@ mod test_super {
 
         let v1 = Vertex::new(
             Vector::new(300.0, 400.0, 0.0),
+            Vector::default(),
+            0.0,
+            0.0,
             Color::RGBA(255, 255, 0, 255),
         );
         let v2 = Vertex::new(
             Vector::new(200.0, 200.0, 0.0),
+            Vector::default(),
+            0.0,
+            0.0,
             Color::RGBA(0, 255, 255, 255),
         );
         let v3 = Vertex::new(
             Vector::new(500.0, 110.0, 0.0),
+            Vector::default(),
+            0.0,
+            0.0,
             Color::RGBA(255, 0, 255, 255),
         );
 
-        canvas.draw_triangle(&v1, &v2, &v3);
+        canvas.draw_triangle(&v1, &v2, &v3, None);
         canvas.render();
         let mut event_pump = sdl_context.event_pump().unwrap();
         'running: loop {

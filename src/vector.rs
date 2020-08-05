@@ -1,6 +1,6 @@
 use std::ops::Sub;
 
-#[derive(Debug, Default)]
+#[derive(Copy, Clone, Debug, Default)]
 pub struct Vector {
     pub x: f32,
     pub y: f32,

@@ -1,4 +1,4 @@
-use crate::{vector::Vector, vertex::Vertex};
+use crate::{texture::Texture, vector::Vector, vertex::Vertex};
 use anyhow::{anyhow, bail, Result};
 use sdl2::pixels::Color;
 use std::fs::File;
@@ -8,18 +8,25 @@ pub struct Mesh {
     pub rotation: Vector,
     pub vertices: Vec<Vertex>,
     pub indices: Vec<(usize, usize, usize)>,
+    pub texture: Option<Texture>,
 }
 
 impl Mesh {
-    pub fn load(path: &str) -> Result<Mesh> {
+    pub fn load(path: &str, texture_path: Option<&str>) -> Result<Mesh> {
         let mut file = File::open(path)?;
         let mut content = String::new();
         file.read_to_string(&mut content)?;
         // println!("mesh\n{}", content);
-        Self::parse(content)
+
+        let texture = if let Some(path) = texture_path {
+            Some(Texture::load(path)?)
+        } else {
+            None
+        };
+        Self::parse(content, texture)
     }
 
-    pub fn parse(content: String) -> Result<Mesh> {
+    pub fn parse(content: String, texture: Option<Texture>) -> Result<Mesh> {
         let mut lines = content.split('\n');
 
         // 吃掉格式描述信息
@@ -53,9 +60,10 @@ impl Mesh {
                 .map(|a| a.parse())
                 .collect::<Result<Vec<f32>, _>>()?;
             match v[..] {
-                [x, y, z, ..] => {
+                [x, y, z, nx, ny, nz, u, v] => {
                     let p = Vector::new(x, y, z);
-                    let v = Vertex::new(p, Color::RGBA(255, 255, 255, 255));
+                    let n = Vector::new(nx, ny, nz);
+                    let v = Vertex::new(p, n, u, v, Color::RGBA(255, 255, 255, 255));
                     vertices.push(v);
                 }
                 _ => bail!("解析顶点数据错误"),
@@ -81,6 +89,7 @@ impl Mesh {
             rotation: Vector::default(),
             vertices,
             indices,
+            texture,
         })
     }
 }
