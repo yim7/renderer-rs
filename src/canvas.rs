@@ -175,7 +175,7 @@ impl<'a> Canvas<'a> {
         p.x = p.x * w + w / 2.0;
         p.y = -p.y * h + h / 2.0;
 
-        Vertex::new(p, v.normal, v.u, v.u, v.color)
+        Vertex::new(p, v.normal, v.u, v.v, v.color)
     }
 
     pub fn draw_mesh(&mut self, mesh: &Mesh) {
@@ -196,11 +196,27 @@ impl<'a> Canvas<'a> {
             let a = &mesh.vertices[*i];
             let b = &mesh.vertices[*j];
             let c = &mesh.vertices[*k];
-
+            // println!("{:?} {:?} {:?}", a, b, c);
             let v1 = self.project(a, &transform);
             let v2 = self.project(b, &transform);
             let v3 = self.project(c, &transform);
+            // println!("{:?} {:?} {:?}", v1, v2, v3);
             self.draw_triangle(&v1, &v2, &v3, mesh.texture.as_ref());
+        }
+    }
+
+    pub fn draw_image(&mut self, image: &Texture) {
+        let Texture {
+            width,
+            height,
+            pixels,
+        } = image;
+        for x in 0..*width {
+            for y in 0..*height {
+                let pixel = pixels[y * width + x];
+                let point = Vector::new(x as f32, y as f32, 0.0);
+                self.draw_point(&point, pixel)
+            }
         }
     }
 }
