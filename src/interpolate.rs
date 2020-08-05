@@ -20,7 +20,7 @@ impl Interpolate for Vertex {
         let position = self.position.interpolate(&other.position, factor);
         let normal = self.normal.interpolate(&other.normal, factor);
         let u = self.u.interpolate(&other.u, factor);
-        let v = self.u.interpolate(&other.v, factor);
+        let v = self.v.interpolate(&other.v, factor);
         let color = self.color.interpolate(&other.color, factor);
         Vertex {
             position,
