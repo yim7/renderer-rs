@@ -1,6 +1,6 @@
 use crate::{
-    interpolate::Interpolate, matrix::Matrix, mesh::Mesh, texture::Texture, vector::Vector,
-    vertex::Vertex,
+    interpolate::Interpolate, matrix::Matrix, mesh::Mesh, texture::Texture, utils::blend_alpha,
+    vector::Vector, vertex::Vertex,
 };
 use sdl2::render::TextureCreator;
 use sdl2::{
@@ -64,7 +64,19 @@ impl<'a> Canvas<'a> {
         self.renderer.clear()
     }
 
-    fn set_pixel(&mut self, x: u32, y: u32, z: f32, color: Color) {
+    fn get_pixel(&self, x: u32, y: u32) -> Color {
+        self.pixels.with_lock(|pixels| {
+            let index = (self.width * y + x) as usize;
+            let i = index * 4;
+            let r = pixels[i] as u8;
+            let g = pixels[i + 1] as u8;
+            let b = pixels[i] as u8;
+            let a = pixels[i] as u8;
+            Color::RGBA(r, g, b, a)
+        })
+    }
+
+    fn set_pixel(&mut self, x: u32, y: u32, z: f32, mut color: Color) {
         let w = self.width;
         let index = (w * y + x) as usize;
 
@@ -72,8 +84,14 @@ impl<'a> Canvas<'a> {
         if z > depth {
             return;
         }
+        if color.a == 0 {
+            return;
+        }
+
         self.depth_buffer[index] = z;
 
+        let bg = self.get_pixel(x, y);
+        color = blend_alpha(color, bg);
         self.pixels.with_lock_mut(|pixels| {
             let index = index * 4;
             let Color { r, g, b, a } = color;
@@ -196,6 +214,7 @@ impl<'a> Canvas<'a> {
             let a = &mesh.vertices[*i];
             let b = &mesh.vertices[*j];
             let c = &mesh.vertices[*k];
+            // println!("draw triangle {:?} {:?} {:?}", a, b, c);
             // println!("{:?} {:?} {:?}", a, b, c);
             let v1 = self.project(a, &transform);
             let v2 = self.project(b, &transform);

@@ -1,5 +1,5 @@
 use sdl2::event::Event;
-use sdl2::{keyboard::Keycode, pixels::Color};
+use sdl2::{keyboard::Keycode, mouse::MouseWheelDirection, pixels::Color};
 
 use std::time::Duration;
 
@@ -8,11 +8,13 @@ mod interpolate;
 mod matrix;
 mod mesh;
 mod texture;
+mod utils;
 mod vector;
 mod vertex;
 
 use canvas::Canvas;
 use mesh::Mesh;
+use texture::Texture;
 use vector::Vector;
 use vertex::Vertex;
 
@@ -20,8 +22,7 @@ pub fn main() {
     let sdl_context = sdl2::init().unwrap();
 
     let mut canvas = Canvas::new(&sdl_context, "game", 800, 600);
-
-    let mut mesh = Mesh::load("assets/illidan.3d", Some("assets/illidan.image")).unwrap();
+    let mut mesh = Mesh::load_obj("assets/ahri.obj", Some("assets/ahri.image")).unwrap();
 
     let mut event_pump = sdl_context.event_pump().unwrap();
     'running: loop {
@@ -37,18 +38,26 @@ pub fn main() {
                     keycode: Some(key), ..
                 } => match key {
                     Keycode::Up => mesh.rotation.x += 1.0,
-                    Keycode::Down => mesh.rotation.y -= 1.0,
+                    Keycode::Down => mesh.rotation.x -= 1.0,
                     Keycode::Left => mesh.rotation.y += 1.0,
                     Keycode::Right => mesh.rotation.y -= 1.0,
-                    Keycode::W => mesh.position.x += 1.0,
-                    Keycode::S => mesh.position.x -= 1.0,
-                    Keycode::A => mesh.position.y -= 1.0,
-                    Keycode::D => mesh.position.y += 1.0,
+                    Keycode::W => mesh.position.y += 1.0,
+                    Keycode::S => mesh.position.y -= 1.0,
+                    Keycode::A => mesh.position.x -= 1.0,
+                    Keycode::D => mesh.position.x += 1.0,
                     _ => {}
                 },
+                Event::MouseWheel { y, .. } => {
+                    if y > 0 {
+                        mesh.position.z -= 1.0;
+                    } else if y < 0 {
+                        mesh.position.z += 1.0;
+                    }
+                }
                 _ => {}
             }
         }
+
         canvas.draw_mesh(&mesh);
         canvas.render();
         // The rest of the game loop goes here...
