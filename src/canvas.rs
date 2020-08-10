@@ -1,10 +1,10 @@
 use crate::{
-    interpolate::Interpolate, matrix::Matrix, mesh::Mesh, texture::Texture, utils::blend_alpha,
+    color::Color, interpolate::Interpolate, matrix::Matrix, mesh::Mesh, texture::Texture,
     vector::Vector, vertex::Vertex,
 };
 use sdl2::render::TextureCreator;
 use sdl2::{
-    pixels::{Color, PixelFormatEnum},
+    pixels::PixelFormatEnum,
     render::{self, Texture as SdlTexture},
     surface::Surface,
     video::{Window, WindowContext},
@@ -19,6 +19,9 @@ pub struct Canvas<'a> {
     width: u32,
     height: u32,
     depth_buffer: Vec<f32>,
+    world_matrix: Matrix,
+    view_matrix: Matrix,
+    light: Vector,
 }
 
 impl<'a> Canvas<'a> {
@@ -34,6 +37,7 @@ impl<'a> Canvas<'a> {
         let pixels = Surface::new(width, height, PixelFormatEnum::RGBA32).unwrap();
         let len = (width * height) as usize;
         let depth_buffer = vec![f32::MAX; len];
+        let light = Vector::new(2.0, 2.0, -15.0);
         Canvas {
             pixels,
             renderer,
@@ -41,6 +45,9 @@ impl<'a> Canvas<'a> {
             width,
             height,
             depth_buffer,
+            world_matrix: Matrix::zero(),
+            view_matrix: Matrix::zero(),
+            light,
         }
     }
 
@@ -58,7 +65,7 @@ impl<'a> Canvas<'a> {
 
     pub fn clear(&mut self) {
         self.pixels
-            .fill_rect(None, Color::RGBA(0, 0, 0, 255))
+            .fill_rect(None, Color::new(0, 0, 0, 255).into())
             .unwrap();
         self.depth_buffer.iter_mut().for_each(|x| *x = f32::MAX);
         self.renderer.clear()
@@ -72,7 +79,7 @@ impl<'a> Canvas<'a> {
             let g = pixels[i + 1] as u8;
             let b = pixels[i] as u8;
             let a = pixels[i] as u8;
-            Color::RGBA(r, g, b, a)
+            Color::new(r, g, b, a)
         })
     }
 
@@ -91,7 +98,7 @@ impl<'a> Canvas<'a> {
         self.depth_buffer[index] = z;
 
         let bg = self.get_pixel(x, y);
-        color = blend_alpha(color, bg);
+        color = color.blend_alpha(&bg);
         self.pixels.with_lock_mut(|pixels| {
             let index = index * 4;
             let Color { r, g, b, a } = color;
@@ -132,11 +139,12 @@ impl<'a> Canvas<'a> {
             };
 
             let v = v1.interpolate(&v2, factor);
-            let color = if let Some(t) = texture {
+            let mut color = if let Some(t) = texture {
                 t.sample(v.u, v.v)
             } else {
                 v.color
             };
+            color = color.shading(v.intensity);
             self.draw_point(&v.position, color);
         }
     }
@@ -159,9 +167,10 @@ impl<'a> Canvas<'a> {
         }
         let middle_factor = (v2.position.y - v1.position.y) / (v3.position.y - v1.position.y);
         let middle = v1.interpolate(v3, middle_factor);
+        // assert_eq!(middle.position.y, v2.position.y);
         // println!("middle {:?}", middle);
         let start_y = v1.position.y as i32;
-        let end_y = v2.position.y as i32;
+        let end_y = v2.position.y.ceil() as i32;
         for y in start_y..=end_y {
             let factor = if start_y == end_y {
                 0.0
@@ -173,7 +182,7 @@ impl<'a> Canvas<'a> {
             self.draw_scanline(&va, &vb, texture);
         }
         let start_y = v2.position.y as i32;
-        let end_y = v3.position.y as i32;
+        let end_y = v3.position.y.ceil() as i32;
         for y in start_y..=end_y {
             let factor = if start_y == end_y {
                 0.0
@@ -193,10 +202,10 @@ impl<'a> Canvas<'a> {
         p.x = p.x * w + w / 2.0;
         p.y = -p.y * h + h / 2.0;
 
-        Vertex::new(p, v.normal, v.u, v.v, v.color)
+        Vertex { position: p, ..*v }
     }
 
-    pub fn draw_mesh(&mut self, mesh: &Mesh) {
+    pub fn draw_mesh(&mut self, mesh: &mut Mesh) {
         let camera_position = Vector::new(0.0, 0.0, -20.0);
         let camera_target = Vector::new(0.0, 0.0, 0.0);
         let camera_up = Vector::new(0.0, 1.0, 0.0);
@@ -209,19 +218,41 @@ impl<'a> Canvas<'a> {
 
         let world = rotation * translation;
         let transform = world * view * projection;
+        self.world_matrix = world;
+        self.view_matrix = view;
 
         for (i, j, k) in &mesh.indices {
-            let a = &mesh.vertices[*i];
-            let b = &mesh.vertices[*j];
-            let c = &mesh.vertices[*k];
+            let mut a = mesh.vertices[*i];
+            let mut b = mesh.vertices[*j];
+            let mut c = mesh.vertices[*k];
+            self.shading(&mut a, &mut b, &mut c);
             // println!("draw triangle {:?} {:?} {:?}", a, b, c);
             // println!("{:?} {:?} {:?}", a, b, c);
-            let v1 = self.project(a, &transform);
-            let v2 = self.project(b, &transform);
-            let v3 = self.project(c, &transform);
+            let v1 = self.project(&a, &transform);
+            let v2 = self.project(&b, &transform);
+            let v3 = self.project(&c, &transform);
             // println!("{:?} {:?} {:?}", v1, v2, v3);
             self.draw_triangle(&v1, &v2, &v3, mesh.texture.as_ref());
         }
+    }
+
+    pub fn shading(&self, v1: &mut Vertex, v2: &mut Vertex, v3: &mut Vertex) {
+        for v in vec![v1, v2, v3] {
+            self.gouraud_shading(v);
+        }
+    }
+    pub fn gouraud_shading(&self, v: &mut Vertex) {
+        let light = &self.light;
+        let world = self.world_matrix;
+
+        let n = world.transform_vector(&v.normal).normalize();
+        let p = (light - &self.world_matrix.transform_vector(&v.position)).normalize();
+
+        let mut intensity = n.dot(&p);
+        if intensity < 0.0 {
+            intensity = 0.0;
+        }
+        v.intensity = intensity;
     }
 
     pub fn draw_image(&mut self, image: &Texture) {

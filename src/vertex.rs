@@ -1,12 +1,12 @@
-use crate::vector::Vector;
-use sdl2::pixels::Color;
-#[derive(Debug)]
+use crate::{color::Color, vector::Vector};
+#[derive(Copy, Clone, Debug, Default, PartialEq)]
 pub struct Vertex {
     pub position: Vector,
     pub normal: Vector,
     pub u: f32,
     pub v: f32,
     pub color: Color,
+    pub intensity: f32,
 }
 
 impl Vertex {
@@ -17,6 +17,7 @@ impl Vertex {
             u,
             v,
             color,
+            intensity: 1.0,
         }
     }
 }

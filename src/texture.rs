@@ -1,5 +1,5 @@
+use crate::color::Color;
 use anyhow::{anyhow, bail, Result};
-use sdl2::pixels::{Color, PixelFormatEnum};
 use std::fs::File;
 use std::io::prelude::*;
 
@@ -45,7 +45,7 @@ impl Texture {
                 let g = (pixel >> 16) & 0xFF;
                 let b = (pixel >> 8) & 0xFF;
                 let a = (pixel) & 0xFF;
-                let color = Color::RGBA(r as u8, g as u8, b as u8, a as u8);
+                let color = Color::new(r as u8, g as u8, b as u8, a as u8);
                 pixels.push(color);
             }
         }

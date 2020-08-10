@@ -1,6 +1,7 @@
 use crate::vector::Vector;
 use std::ops::Mul;
 
+#[derive(Copy, Clone)]
 pub struct Matrix {
     m: [f32; 16],
 }
@@ -8,6 +9,10 @@ pub struct Matrix {
 impl Matrix {
     pub fn new(values: [f32; 16]) -> Self {
         Matrix { m: values }
+    }
+
+    pub fn zero() -> Self {
+        Self { m: [0.0; 16] }
     }
 
     pub fn look_at_lh(eye: &Vector, target: &Vector, up: &Vector) -> Self {
@@ -90,7 +95,7 @@ impl Matrix {
     }
 
     pub fn translation(v: &Vector) -> Self {
-        let Vector { x, y, z } = *v;
+        let Vector { x, y, z, .. } = *v;
         #[rustfmt::skip]
         let values = [
             1.0, 0.0, 0.0, 0.0,
@@ -107,7 +112,20 @@ impl Matrix {
         let y = v.x * m[0 * 4 + 1] + v.y * m[1 * 4 + 1] + v.z * m[2 * 4 + 1] + m[3 * 4 + 1];
         let z = v.x * m[0 * 4 + 2] + v.y * m[1 * 4 + 2] + v.z * m[2 * 4 + 2] + m[3 * 4 + 2];
         let w = v.x * m[0 * 4 + 3] + v.y * m[1 * 4 + 3] + v.z * m[2 * 4 + 3] + m[3 * 4 + 3];
-        return Vector::new(x / w, y / w, z / w);
+        Vector {
+            x: x / w,
+            y: y / w,
+            z: z / w,
+            w: 1.0 / w,
+        }
+    }
+
+    pub fn transform_vector(&self, v: &Vector) -> Vector {
+        let m = self.m;
+        let x = v.x * m[0 * 4 + 0] + v.y * m[1 * 4 + 0] + v.z * m[2 * 4 + 0] + m[3 * 4 + 0];
+        let y = v.x * m[0 * 4 + 1] + v.y * m[1 * 4 + 1] + v.z * m[2 * 4 + 1] + m[3 * 4 + 1];
+        let z = v.x * m[0 * 4 + 2] + v.y * m[1 * 4 + 2] + v.z * m[2 * 4 + 2] + m[3 * 4 + 2];
+        Vector { x, y, z, w: 0.0 }
     }
 }
 
