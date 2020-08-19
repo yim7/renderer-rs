@@ -112,7 +112,7 @@ impl<'a> Canvas<'a> {
     pub fn draw_point(&mut self, point: &Vector, color: Color) {
         let x = point.x.round() as u32;
         let y = point.y.round() as u32;
-        let z = point.z;
+        let z = point.w;
         let Self { width, height, .. } = *self;
         if x < width && y < height {
             self.set_pixel(x, y, z, color);
