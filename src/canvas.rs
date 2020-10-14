@@ -30,6 +30,7 @@ impl<'a> Canvas<'a> {
         let window = video_subsystem
             .window(title, width, height)
             .position_centered()
+            .allow_highdpi()
             .build()
             .unwrap();
         let renderer = window.into_canvas().build().unwrap();

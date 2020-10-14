@@ -1,5 +1,5 @@
 use crate::color::Color;
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, Result};
 use std::fs::File;
 use std::io::prelude::*;
 

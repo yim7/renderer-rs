@@ -1,5 +1,5 @@
 use crate::{canvas::Canvas, mesh::Mesh};
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, Result};
 use sdl2::{event::Event, keyboard::Keycode, Sdl};
 pub struct Window<'a> {
     sdl: Sdl,
@@ -10,7 +10,7 @@ pub struct Window<'a> {
 
 impl<'a> Window<'a> {
     pub fn new(title: &str, width: u32, height: u32) -> Result<Self> {
-        let sdl = sdl2::init().or(Err(anyhow!("sdl init error")))?;
+        let sdl = sdl2::init().map_err(|_| anyhow!("sdl init error"))?;
         let canvas = Canvas::new(&sdl, title, width, height);
         Ok(Window {
             sdl,
